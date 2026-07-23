@@ -8,62 +8,36 @@ const LINEAR_API_TOKEN = process.env.LINEAR_API_TOKEN;
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
 const PORT = process.env.PORT || 3000;
 
-const LINEAR_ENDPOINT = 'https://api.linear.app/graphql';
-const CLAUDE_ENDPOINT = 'https://api.anthropic.com/v1/messages';
-
 app.post('/webhook', async (req, res) => {
+  console.log('Webhook received:', JSON.stringify(req.body, null, 2));
+  
   try {
     const event = req.body;
     
-    if (event.type !== 'Comment' || event.action !== 'create') {
+    if (!event.data || !event.data.body) {
+      console.log('Not a comment event, ignoring');
       return res.status(200).json({ message: 'Event ignored' });
     }
 
-    const comment = event.data;
-    const commentBody = comment.body;
-    const issueId = comment.issueId;
+    const commentBody = event.data.body;
+    const issueId = event.data.issueId;
 
     if (!commentBody.toLowerCase().includes('execute')) {
-      return res.status(200).json({ message: 'No execute command found' });
+      console.log('No execute command found');
+      return res.status(200).json({ message: 'No execute command' });
     }
 
     console.log(`Processing webhook for issue: ${issueId}`);
-    
-    const issueQuery = `query { issue(id: "${issueId}") { id title description status { name } } }`;
-
-    const linearResponse = await axios.post(LINEAR_ENDPOINT, 
-      { query: issueQuery },
-      { headers: { Authorization: `Bearer ${LINEAR_API_TOKEN}` } }
-    );
-
-    const issue = linearResponse.data.data.issue;
-    console.log(`Issue: ${issue.title}`);
-
-    const claudeResponse = await axios.post(CLAUDE_ENDPOINT,
-      {
-        model: 'claude-opus-4-1',
-        max_tokens: 1024,
-        messages: [{
-          role: 'user',
-          content: `Execute this task: ${issue.title}\n${issue.description}`
-        }]
-      },
-      { headers: { 'x-api-key': CLAUDE_API_KEY } }
-    );
-
-    const claudeMessage = claudeResponse.data.content[0].text;
-    console.log(`Claude response: ${claudeMessage}`);
-
-    res.status(200).json({ 
-      success: true, 
-      issue: issue.id,
-      response: claudeMessage 
-    });
+    res.status(200).json({ success: true, message: 'Webhook received' });
 
   } catch (error) {
-    console.error('Webhook error:', error.message);
+    console.error('Webhook error:', error);
     res.status(500).json({ error: error.message });
   }
+});
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
 });
 
 app.listen(PORT, () => {
