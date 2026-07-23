@@ -15,7 +15,7 @@ app.post('/webhook', async (req, res) => {
   try {
     const event = req.body;
     
-    if (event.type !== 'Comment' || !event.action === 'create') {
+    if (event.type !== 'Comment' || event.action !== 'create') {
       return res.status(200).json({ message: 'Event ignored' });
     }
 
@@ -27,38 +27,45 @@ app.post('/webhook', async (req, res) => {
       return res.status(200).json({ message: 'No execute command found' });
     }
 
-    console.log(`Executing task: ${issueId}`);
+    console.log(`Processing webhook for issue: ${issueId}`);
+    
+    const issueQuery = `query { issue(id: "${issueId}") { id title description status { name } } }`;
 
-    const issueQuery = `
-      query {
-        issue(id: "${issueId}") {
-          id
-          title
-          description
-          status {
-            name
-          }
-        }
-      }
+    const linearResponse = await axios.post(LINEAR_ENDPOINT, 
+      { query: issueQuery },
+      { headers: { Authorization: `Bearer ${LINEAR_API_TOKEN}` } }
+    );
 
-cat > package.json << 'EOF'
-{
-  "name": "linear-claude-webhook",
-  "version": "1.0.0",
-  "description": "Webhook server to trigger Claude execution from Linear comments",
-  "main": "linear-webhook-server.js",
-  "scripts": {
-    "start": "node linear-webhook-server.js",
-    "dev": "nodemon linear-webhook-server.js"
-  },
-  "keywords": ["linear", "claude", "webhook"],
-  "author": "",
-  "license": "MIT",
-  "dependencies": {
-    "express": "^4.18.2",
-    "axios": "^1.6.0"
-  },
-  "engines": {
-    "node": "18.x"
+    const issue = linearResponse.data.data.issue;
+    console.log(`Issue: ${issue.title}`);
+
+    const claudeResponse = await axios.post(CLAUDE_ENDPOINT,
+      {
+        model: 'claude-opus-4-1',
+        max_tokens: 1024,
+        messages: [{
+          role: 'user',
+          content: `Execute this task: ${issue.title}\n${issue.description}`
+        }]
+      },
+      { headers: { 'x-api-key': CLAUDE_API_KEY } }
+    );
+
+    const claudeMessage = claudeResponse.data.content[0].text;
+    console.log(`Claude response: ${claudeMessage}`);
+
+    res.status(200).json({ 
+      success: true, 
+      issue: issue.id,
+      response: claudeMessage 
+    });
+
+  } catch (error) {
+    console.error('Webhook error:', error.message);
+    res.status(500).json({ error: error.message });
   }
-}
+});
+
+app.listen(PORT, () => {
+  console.log(`Webhook server listening on port ${PORT}`);
+});
