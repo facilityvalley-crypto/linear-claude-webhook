@@ -1,0 +1,15 @@
+{
+  "name": "linear-claude-webhook",
+  "version": "1.0.0",
+  "main": "linear-webhook-server.js",
+  "scripts": {
+    "start": "node linear-webhook-server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.6.0"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
